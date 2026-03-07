@@ -5,7 +5,7 @@
 // 4. Check that all the products belong to the same restaurant
 // 5. Check that startedAt, sentAt and deliveredAt are not present in the body.
 const create = [
-  
+  check('price')
 ]
 // TODO: Include validation rules for update that should:
 // 1. Check that restaurantId is NOT present in the body.

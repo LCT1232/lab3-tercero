@@ -1,13 +1,36 @@
 import { Order, Restaurant } from '../models/models.js'
 
-// TODO: Implement the following function to check if the order belongs to current loggedIn customer (order.userId equals or not to req.user.id)
+// DONE: Implement the following function to check if the order belongs to current loggedIn customer (order.userId equals or not to req.user.id)
 const checkOrderCustomer = async (req, res, next) => {
-  return next()
+  try {
+    const order = await Order.findByPk(req.params.orderId)
+    if (order.userId == req.user.id) {
+      return next()
+    } else {
+      res.status(403).send('This order does not belong to you.')
+    }
+  } catch (err) {
+    return res.status(500).send(err)
+  }
 }
 
-// TODO: Implement the following function to check if the restaurant of the order exists
+// DONE: Implement the following function to check if the restaurant of the order exists
 const checkRestaurantExists = async (req, res, next) => {
-  return next()
+  try {
+    const order = await Order.findByPk(req.params.orderId, {
+    include: {
+      model: Restaurant,
+      as: 'restaurant'
+    }
+    })
+    if (order.restaurant) {
+      return next()
+    } else {
+      return res.status(403).send('The restaurant of the order does not exist')
+    }
+  } catch (err) {
+    return res.status(500).send(err)
+  }
 }
 
 const checkOrderOwnership = async (req, res, next) => {
