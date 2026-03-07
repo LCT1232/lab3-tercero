@@ -1,7 +1,7 @@
 import { Order, Product, Restaurant, User, sequelizeSession } from '../models/models.js'
 import moment from 'moment'
 import { Op } from 'sequelize'
-const generateFilterWhereClauses = function (req) {
+const generateFilterWhereClauses = function (req) { // función que filtra los pedidos según su estado (fecha)
   const filterWhereClauses = []
   if (req.query.status) {
     switch (req.query.status) {
@@ -56,13 +56,12 @@ const generateFilterWhereClauses = function (req) {
     const date = moment(req.query.to, 'YYYY-MM-DD', true)
     filterWhereClauses.push({
       createdAt: {
-        [Op.lte]: date.add(1, 'days') // FIXME: se pasa al siguiente día a las 00:00
+        [Op.lte]: date.endOf('day') // [Op.lte]: date.add(1, 'days'): incluiría las 00:00 de otro día
       }
     })
   }
   return filterWhereClauses
 }
-
 // Returns :restaurantId orders
 const indexRestaurant = async function (req, res) {
   const whereClauses = generateFilterWhereClauses(req)
@@ -82,42 +81,104 @@ const indexRestaurant = async function (req, res) {
     res.status(500).send(err)
   }
 }
-
-// TODO: Implement the indexCustomer function that queries orders from current logged-in customer and send them back.
-// Orders have to include products that belongs to each order and restaurant details
-// sort them by createdAt date, desc.
+// DONE: Implement the indexCustomer function that queries orders from current logged-in customer and send them back.
 const indexCustomer = async function (req, res) {
-  res.status(500).send('This function is to be implemented')
+  try {
+    const orders = await Order.findAll({
+      attributes: { exclude: ['restaurantId'] },
+      where: { userId: req.user.id }, // pedidos del cliente logueado
+      include: [
+        { model: Product, as: 'products' }, // incluir productos
+        { model: Restaurant, as: 'restaurant' } // incluir restaurante
+      ],
+      order: [['createdAt', 'DESC']] // ordenado por fecha de creación descendente
+    })
+    res.json(orders)
+  } catch (err) {
+    res.status(500).send(err)
+  }
 }
-
-// TODO: Implement the create function that receives a new order and stores it in the database.
-// Take into account that:
-// 1. If price is greater than 10€, shipping costs have to be 0.
-// 2. If price is less or equals to 10€, shipping costs have to be restaurant default shipping costs and have to be added to the order total price
-// 3. In order to save the order and related products, start a transaction, store the order, store each product linea and commit the transaction
-// 4. If an exception is raised, catch it and rollback the transaction
-
-const create = async (req, res) => {
-  // Use sequelizeSession to start a transaction
-  res.status(500).send('This function is to be implemented')
+// DONE: Implement the create function that receives a new order and stores it in the database.
+const create = async function(req, res) {
+  const t = await sequelize.transaction() // usando transacción
+  try {
+    const restaurant = await Restaurant.findByPk(req.body.restaurantId) // vemos id del restaurante donde se quiere crear pedido
+    const newOrder = Order.build(req.body) // creamos el pedido
+    newOrder.userId = req.user.id // asignamos userId 
+    if (newOrder.price > 10) { // shipping rules
+      newOrder.shippingCosts = 0
+    } else {
+      newOrder.shippingCosts = restaurant.shippingCosts
+      newOrder.price = newOrder.price + restaurant.shippingCosts
+    }
+    const order = await newOrder.save({ transaction: t }) // guardar pedido
+    // guardar productos del pedido
+    for (const p of req.body.products) { // para cada producto p del pedido
+      await Product.create({ // creamos el producto
+        orderId: order.id,
+        productId: p.productId,
+        quantity: p.quantity
+      }, { transaction: t })
+    }
+    await t.commit() // si todo va bien se hace commit
+    res.json(order)
+  } catch (err) {
+    await t.rollback() // si hay error se hace rollback
+    res.status(500).send(err)
+  }
 }
-
-// TODO: Implement the update function that receives a modified order and persists it in the database.
-// Take into account that:
-// 1. If price is greater than 10€, shipping costs have to be 0.
-// 2. If price is less or equals to 10€, shipping costs have to be restaurant default shipping costs and have to be added to the order total price
-// 3. In order to save the updated order and updated products, start a transaction, update the order, remove the old related OrderProducts and store the new product lines, and commit the transaction
-// 4. If an exception is raised, catch it and rollback the transaction
+// DONE: Implement the update function that receives a modified order and persists it in the database.
+/*
+update = hacer lo mismo que en create, pero con dos diferencias clave:
+  - actualiza el pedido actual
+  - borra los productos antiguos y guarda los nuevos
+Flujo
+1. update order
+2. delete old OrderProducts
+3. insert new OrderProducts
+4. commit
+5. rollback if error
+*/
 const update = async function (req, res) {
-  // Use sequelizeSession to start a transaction
-  res.status(500).send('This function is to be implemented')
+  const t = await sequelize.transaction() // inicio de transacción
+  try {
+    const order = await Order.findByPk(req.params.orderId, { transaction: t }) // buscar orden 
+    const restaurant = await Restaurant.findByPk(req.body.restaurantId) // buscar restaurante
+    order.set(req.body) // actualizar datos del pedido
+    if (order.price > 10) { // mismas condiciones del create
+      order.shippingCosts = 0
+    } else {
+      order.shippingCosts = restaurant.shippingCosts
+      order.price = order.price + restaurant.shippingCosts
+    }
+    await order.save({ transaction: t }) // guarda nuevo pedido
+    await OrderProducts.destroy({ // eliminar productos antiguos del pedido
+      where: { orderId: order.id },
+      transaction: t
+    })
+    for (const p of req.body.products) { // guardar nuevos productos
+      await OrderProducts.create({
+        orderId: order.id,
+        productId: p.productId,
+        quantity: p.quantity
+      }, { transaction: t })
+    }
+    await t.commit() // commit si todo va bien
+    res.json(order)
+  } catch (err) {
+    await t.rollback()
+    res.status(500).send(err)
+  }
 }
 
-// TODO: Implement the destroy function that receives an orderId as path param and removes the associated order from the database.
-// Take into account that:
-// 1. The migration include the "ON DELETE CASCADE" directive so OrderProducts related to this order will be automatically removed.
+// DONE: Implement the destroy function that receives an orderId as path param and removes the associated order from the database.
 const destroy = async function (req, res) {
-  res.status(500).send('This function is to be implemented')
+  try {
+    await Order.destroy({ where: { id: req.params.orderId }})
+    res.json('deleted')
+  } catch (err) {
+    res.status(500).send(err)
+  }
 }
 
 const confirm = async function (req, res) {
@@ -180,11 +241,12 @@ const show = async function (req, res) {
   }
 }
 
+// calcula estadísticas de pedidos de un restaurante
 const analytics = async function (req, res) {
   const yesterdayZeroHours = moment().subtract(1, 'days').set({ hour: 0, minute: 0, second: 0, millisecond: 0 })
   const todayZeroHours = moment().set({ hour: 0, minute: 0, second: 0, millisecond: 0 })
   try {
-    const numYesterdayOrders = await Order.count({
+    const numYesterdayOrders = await Order.count({ // devuelve el numero de pedidos del día anterior
       where:
       {
         createdAt: {
@@ -194,27 +256,26 @@ const analytics = async function (req, res) {
         restaurantId: req.params.restaurantId
       }
     })
-    const numPendingOrders = await Order.count({
+    const numPendingOrders = await Order.count({ // devuelve el numero de pedidos pendientes
       where:
       {
         startedAt: null,
         restaurantId: req.params.restaurantId
       }
     })
-    const numDeliveredTodayOrders = await Order.count({
+    const numDeliveredTodayOrders = await Order.count({ // numero de pedidos entregados del dia 
       where:
       {
         deliveredAt: { [Op.gte]: todayZeroHours },
         restaurantId: req.params.restaurantId
       }
     })
-
-    const invoicedToday = await Order.sum(
+    const invoicedToday = await Order.sum( // beneficios del dia
       'price',
       {
         where:
         {
-          createdAt: { [Op.gte]: todayZeroHours }, // FIXME: Created or confirmed?
+          deliveredAt: { [Op.gte]: todayZeroHours }, // contamos facturado cuando el pedido esté entregado, en consecuencia, pagado
           restaurantId: req.params.restaurantId
         }
       })
