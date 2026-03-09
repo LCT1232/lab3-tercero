@@ -114,7 +114,7 @@ const create = async function(req, res) {
     const order = await newOrder.save({ transaction: t }) // guardar pedido
     // guardar productos del pedido
     for (const p of req.body.products) { // para cada producto p del pedido
-      await Product.create({ // creamos el producto
+      await OrderProducts.create({ // creamos el producto
         orderId: order.id,
         productId: p.productId,
         quantity: p.quantity

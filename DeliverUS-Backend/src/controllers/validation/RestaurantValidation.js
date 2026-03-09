@@ -21,9 +21,9 @@ const create = [
   // DONE: Complete validations
   check('address').exists().isString().isLength({ min: 1, max: 255 }).trim(),
   check('postalCode').exists().isString().isLength({ min: 1, max: 255 }).trim(),
-  check('url').optional({ nullable: true, checkFalsy: true}).isString(),
-  check('email').optional({ nullable: true, checkFalsy: true}).isString(),
-  check('phone').optional({ nullable: true, checkFalsy: true}).isString(),
+  check('url').optional({ nullable: true, checkFalsy: true }).isString(),
+  check('email').optional({ nullable: true, checkFalsy: true }).isString(),
+  check('phone').optional({ nullable: true, checkFalsy: true }).isString(),
   check('restaurantCategoryId').exists().isInt({ min: 0 }).toInt(),
   check('userId').exists().isInt({ min: 0 }).toInt()
 ]
@@ -46,9 +46,9 @@ const update = [
   // DONE: Complete validations
   check('address').exists().isString().isLength({ min: 1, max: 255 }).trim(),
   check('postalCode').exists().isString().isLength({ min: 1, max: 255 }).trim(),
-  check('url').optional({ nullable: true, checkFalsy: true}).isString(),
-  check('email').optional({ nullable: true, checkFalsy: true}).isString(),
-  check('phone').optional({ nullable: true, checkFalsy: true}).isString(),
+  check('url').optional({ nullable: true, checkFalsy: true }).isString(),
+  check('email').optional({ nullable: true, checkFalsy: true }).isString(),
+  check('phone').optional({ nullable: true, checkFalsy: true }).isString(),
   check('restaurantCategoryId').exists().isInt({ min: 0 }).toInt(),
   check('userId').exists().isInt({ min: 0 }).toInt()
 ]
