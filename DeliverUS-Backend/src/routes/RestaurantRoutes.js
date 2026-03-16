@@ -1,58 +1,66 @@
-import OrderController from '../controllers/OrderController.js'
-import ProductController from '../controllers/ProductController.js'
+import * as RestaurantValidation from '../controllers/validation/RestaurantValidation.js'
 import RestaurantController from '../controllers/RestaurantController.js'
-/*
-is it needed that a user is logged in?
-is it needed that the user has a particular role?
-may the data include files?
-is it needed that the restaurant belongs to the logged-in user? (restaurant data should include a userId which belongs to the owner of that restaurant)
-is it needed that the restaurant data include valid values for each property in order to be created according to our information requirements?
-*/
-// TODO: implementar las rutas añadiendo middlewares y validación
+import ProductController from '../controllers/ProductController.js'
+import OrderController from '../controllers/OrderController.js'
+import { isLoggedIn, hasRole } from '../middlewares/AuthMiddleware.js'
+import { handleValidation } from '../middlewares/ValidationHandlingMiddleware.js'
+import { checkEntityExists } from '../middlewares/EntityMiddleware.js'
+import * as RestaurantMiddleware from '../middlewares/RestaurantMiddleware.js'
+import { handleFilesUpload } from '../middlewares/FileHandlerMiddleware.js'
+import { Restaurant } from '../models/models.js'
+
 const loadFileRoutes = function (app) {
   app.route('/restaurants')
-    .get( // buscar restaurante
-      isLoggedIn,
+    .get(
       RestaurantController.index)
-    .post( // crear restaurante
+    .post(
       isLoggedIn,
-      handleFilesUpload(['image'], process.env.RESTAURANTS_FOLDER),
+      hasRole('owner'),
+      handleFilesUpload(['logo', 'heroImage'], process.env.RESTAURANTS_FOLDER),
       RestaurantValidation.create,
       handleValidation,
       RestaurantController.create)
 
   app.route('/restaurants/:restaurantId')
-    .get( // buscar restaurante por id
+    .get(
+      checkEntityExists(Restaurant, 'restaurantId'),
       RestaurantController.show)
-    .put( // actualizar restaurante
+    .put(
       isLoggedIn,
       hasRole('owner'),
-      handleFilesUpload(['image'], process.env.RESTAURANTS_FOLDER),
+      checkEntityExists(Restaurant, 'restaurantId'),
+      RestaurantMiddleware.checkRestaurantOwnership,
+      handleFilesUpload(['logo', 'heroImage'], process.env.RESTAURANTS_FOLDER),
       RestaurantValidation.update,
       handleValidation,
-      RestaurantMiddleware.checkRestaurantOwnership,
       RestaurantController.update)
-    .delete( // eliminar restaurante
+    .delete(
       isLoggedIn,
       hasRole('owner'),
+      checkEntityExists(Restaurant, 'restaurantId'),
+      RestaurantMiddleware.restaurantHasNoOrders,
       RestaurantMiddleware.checkRestaurantOwnership,
       RestaurantController.destroy)
 
   app.route('/restaurants/:restaurantId/orders')
-    .get( // buscar pedidos de un restaurante, suponiendo pedidos de cliente
+    .get(
       isLoggedIn,
-      OrderMiddleware.checkOrderCustomer, // mi pedido tiene mi id
-      OrderMiddleware.checkRestaurantExists, // existe el restuarante donde he pedido
+      hasRole('owner'),
+      checkEntityExists(Restaurant, 'restaurantId'),
+      RestaurantMiddleware.checkRestaurantOwnership,
       OrderController.indexRestaurant)
 
   app.route('/restaurants/:restaurantId/products')
-    .get( // buscar productos de un restaurante, siendo cliente
-      isLoggedIn,
+    .get(
+      checkEntityExists(Restaurant, 'restaurantId'),
       ProductController.indexRestaurant)
 
   app.route('/restaurants/:restaurantId/analytics')
     .get(
       isLoggedIn,
+      hasRole('owner'),
+      checkEntityExists(Restaurant, 'restaurantId'),
+      RestaurantMiddleware.checkRestaurantOwnership,
       OrderController.analytics)
 }
 export default loadFileRoutes

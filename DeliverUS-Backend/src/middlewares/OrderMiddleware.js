@@ -1,38 +1,5 @@
 import { Order, Restaurant } from '../models/models.js'
 
-// DONE: Implement the following function to check if the order belongs to current loggedIn customer (order.userId equals or not to req.user.id)
-const checkOrderCustomer = async (req, res, next) => {
-  try {
-    const order = await Order.findByPk(req.params.orderId)
-    if (order.userId == req.user.id) {
-      return next()
-    } else {
-      res.status(403).send('This order does not belong to you.')
-    }
-  } catch (err) {
-    return res.status(500).send(err)
-  }
-}
-
-// DONE: Implement the following function to check if the restaurant of the order exists
-const checkRestaurantExists = async (req, res, next) => {
-  try {
-    const order = await Order.findByPk(req.params.orderId, {
-    include: {
-      model: Restaurant,
-      as: 'restaurant'
-    }
-    })
-    if (order.restaurant) {
-      return next()
-    } else {
-      return res.status(403).send('The restaurant of the order does not exist')
-    }
-  } catch (err) {
-    return res.status(500).send(err)
-  }
-}
-
 const checkOrderOwnership = async (req, res, next) => {
   try {
     const order = await Order.findByPk(req.params.orderId, {
@@ -48,6 +15,16 @@ const checkOrderOwnership = async (req, res, next) => {
     }
   } catch (err) {
     return res.status(500).send(err)
+  }
+}
+
+// TODO: Implement the following function to check if the order belongs to current loggedIn customer (order.userId equals or not to req.user.id)
+const checkOrderCustomer = async (req, res, next) => {
+  const order = await Order.findByPk(req.params.orderId)
+  if (req.user.id === order.userId) {
+    return next()
+  } else {
+    return res.status(403).send('Not enough privileges. This entity does not belong to you')
   }
 }
 
@@ -94,6 +71,20 @@ const checkOrderCanBeDelivered = async (req, res, next) => {
       return next()
     } else {
       return res.status(409).send('The order cannot be delivered')
+    }
+  } catch (err) {
+    return res.status(500).send(err.message)
+  }
+}
+
+// TODO: Implement the following function to check if the restaurant of the order exists
+const checkRestaurantExists = async (req, res, next) => {
+  try {
+    const restaurant = await Restaurant.findByPk(req.body.restaurantId)
+    if (restaurant) {
+      return next()
+    } else {
+      return res.status(409).send('Restaurant does not exist')
     }
   } catch (err) {
     return res.status(500).send(err.message)
